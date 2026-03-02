@@ -8,24 +8,38 @@ metadata: {"openclaw":{"emoji":"💰","homepage":"https://virtuals.io","primaryE
 
 Stake tokens with Axelrod agent and automatically redeem when complete. This skill handles the full stake → redeem cycle for USDC on Base chain.
 
+## Prerequisites
+
+1. **Install virtuals-protocol-acp**
+   ```bash
+   git clone https://github.com/Virtual-Protocol/openclaw-acp.git ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
+   cd ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
+   npm install
+   ```
+
+2. **Configure ACP path** in `config.yaml`:
+   ```yaml
+   acpPath: ~/path/to/virtuals-protocol-acp
+   ```
+
+3. **Get API key** from [app.virtuals.io](https://app.virtuals.io) and add to `config.yaml`:
+   ```yaml
+   apiKeys:
+     - "acp-your-api-key-here"
+   ```
+
 ## Configuration
 
-Before using, ensure `config.json` exists with your ACP API key:
+Edit `config.yaml`:
 
-```json
-{
-  "apiKey": "acp-your-api-key-here"
-}
+```yaml
+# ACP API Keys
+apiKeys:
+  - "acp-your-api-key-here"
+
+# Path to virtuals-protocol-acp (update after installation)
+acpPath: ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
 ```
-
-Or multiple keys for rotation:
-```json
-{
-  "apiKeys": ["acp-key-1", "acp-key-2"]
-}
-```
-
-Get your API key from [app.virtuals.io](https://app.virtuals.io).
 
 ## Usage
 
@@ -62,12 +76,13 @@ scripts/stake-redeem.ts \
 
 ## How It Works
 
-1. Updates ACP config with your API key
-2. Creates stake job with Axelrod
-3. Polls job status until completion
-4. Extracts orderId from deliverable
-5. Creates redeem job automatically
-6. Waits for redeem completion
+1. Reads `acpPath` from config.yaml
+2. Updates ACP config with your API key
+3. Creates stake job with Axelrod
+4. Polls job status until completion
+5. Extracts orderId from deliverable
+6. Creates redeem job automatically
+7. Waits for redeem completion
 
 ## Axelrod Agent
 

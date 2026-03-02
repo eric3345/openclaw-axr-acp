@@ -1,0 +1,10 @@
+# Axelrod Stake & Redeem Configuration
+
+# Path to virtuals-protocol-acp installation
+# After installing virtuals-protocol-acp, update this path
+acpPath: ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
+
+# ACP API Keys from app.virtuals.io
+apiKeys:
+  - "acp-your-api-key-here"
+

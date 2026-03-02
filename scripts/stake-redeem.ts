@@ -22,18 +22,82 @@ import { homedir } from "os";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Paths
-const ACP_CONFIG_PATH = join(homedir(), "code", "ai", "OpenSource", "Virtual", "virtuals-protocol-acp", "config.json");
+// Project paths
 const PROJECT_ROOT = join(__dirname, "..");
-const CONFIG_PATH = join(PROJECT_ROOT, "config.json");
+const CONFIG_PATH = join(PROJECT_ROOT, "config.yaml");
 
 interface Config {
   apiKeys?: string[];
   apiKey?: string;
+  acpPath?: string;
 }
 
 interface ACPConfig {
   LITE_AGENT_API_KEY?: string;
+}
+
+// Expand ~ in path
+function expandPath(path: string): string {
+  if (path.startsWith("~/") || path === "~") {
+    return join(homedir(), path.slice(1));
+  }
+  return path;
+}
+
+// Simple YAML parser for our config format
+function parseYaml(content: string): Config {
+  const result: any = {};
+  const lines = content.split('\n');
+  let currentArray: string[] | null = null;
+  const arrayKey = "apiKeys";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const match = trimmed.match(/^(\w+):\s*(.*)$/);
+    if (match) {
+      const [, key, value] = match;
+      if (key === arrayKey) {
+        currentArray = [];
+        result[key] = currentArray;
+      } else if (value) {
+        result[key] = value;
+        currentArray = null;
+      }
+    } else if (trimmed.startsWith('- ') && currentArray !== null) {
+      currentArray.push(trimmed.slice(2).replace(/^["']|["']$/g, ''));
+    }
+  }
+
+  return result as Config;
+}
+
+// Load config from YAML
+function loadConfig(): Config {
+  try {
+    const content = readFileSync(CONFIG_PATH, "utf-8");
+    return parseYaml(content);
+  } catch {
+    return {};
+  }
+}
+
+// Get ACP path from config
+function getACPPath(): string {
+  const config = loadConfig();
+  const acpPath = config.acpPath || "~/code/ai/OpenSource/Virtual/virtuals-protocol-acp";
+  return expandPath(acpPath);
+}
+
+// Get ACP config file path
+function getACPConfigPath(): string {
+  return join(getACPPath(), "config.json");
+}
+
+// Get ACP CLI path
+function getACPCLIPath(): string {
+  return join(getACPPath(), "bin", "acp.ts");
 }
 
 // Parse arguments
@@ -55,28 +119,19 @@ function parseArgs(args: string[]): Record<string, string> {
   return result;
 }
 
-// Load config
-function loadConfig(): Config {
-  try {
-    const content = readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
-}
-
 // Update ACP config with API key
 function updateACPConfig(apiKey: string): void {
   try {
+    const acpConfigPath = getACPConfigPath();
     let config: ACPConfig = {};
     try {
-      const content = readFileSync(ACP_CONFIG_PATH, "utf-8");
+      const content = readFileSync(acpConfigPath, "utf-8");
       config = JSON.parse(content);
     } catch {
       // File doesn't exist or is invalid, start fresh
     }
     config.LITE_AGENT_API_KEY = apiKey;
-    writeFileSync(ACP_CONFIG_PATH, JSON.stringify(config, null, 2));
+    writeFileSync(acpConfigPath, JSON.stringify(config, null, 2));
   } catch (error) {
     console.error(`Warning: Could not update ACP config: ${(error as Error).message}`);
   }
@@ -85,8 +140,8 @@ function updateACPConfig(apiKey: string): void {
 // Run ACP command
 async function runACP(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
   return new Promise((resolve) => {
-    const acpPath = join(homedir(), "code", "ai", "OpenSource", "Virtual", "virtuals-protocol-acp", "bin", "acp.ts");
-    const child = spawn("npx", ["tsx", acpPath, ...args], {
+    const acpCLIPath = getACPCLIPath();
+    const child = spawn("npx", ["tsx", acpCLIPath, ...args], {
       stdio: "pipe",
       env: { ...process.env }
     });
@@ -115,7 +170,7 @@ function getApiKey(config: Config, providedKey?: string): string {
   if (config.apiKeys && config.apiKeys.length > 0) {
     return config.apiKeys[0];
   }
-  throw new Error("No API key found in config.json. Please add one.");
+  throw new Error("No API key found in config.yaml. Please add one.");
 }
 
 // Parse job ID from output
