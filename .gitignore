@@ -1,18 +1,8 @@
 # API Keys
-config.yaml
+config.json
 
-# Automation state
-.automation_state.json
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
+# Node
+node_modules/
 
 # IDE
 .vscode/
