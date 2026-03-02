@@ -109,6 +109,16 @@ function parseArgs(args: string[]): Record<string, string> {
   return result;
 }
 
+// Get all API keys
+function getApiKeys(config: Config, providedKey?: string): string[] {
+  if (providedKey) return [providedKey];
+  if (config.apiKey) return [config.apiKey];
+  if (config.apiKeys && config.apiKeys.length > 0) {
+    return config.apiKeys;
+  }
+  throw new Error("No API key found in config.yaml. Please add one.");
+}
+
 // Update ACP config with API key
 function updateACPConfig(apiKey: string): void {
   try {
@@ -151,16 +161,6 @@ async function runACP(args: string[]): Promise<{ stdout: string; stderr: string;
       resolve({ stdout, stderr, exitCode });
     });
   });
-}
-
-// Get API key with rotation
-function getApiKey(config: Config, providedKey?: string): string {
-  if (providedKey) return providedKey;
-  if (config.apiKey) return config.apiKey;
-  if (config.apiKeys && config.apiKeys.length > 0) {
-    return config.apiKeys[0];
-  }
-  throw new Error("No API key found in config.yaml. Please add one.");
 }
 
 // Parse job ID from output
@@ -206,6 +206,138 @@ async function waitForJobCompletion(jobId: string, timeoutMs = 300000): Promise<
   return false;
 }
 
+// Execute stake and redeem for a single API key
+async function executeStakeRedeem(
+  apiKey: string,
+  contract: string,
+  symbol: string,
+  chain: string,
+  amount: string,
+  index: number,
+  total: number
+): Promise<{ success: boolean; stakeJobId?: string; orderId?: string; redeemJobId?: string; error?: string }> {
+  const axelrodWallet = "0x999A1B6033998A05F7e37e4BD471038dF46624E1";
+
+  console.log(`\n${"=".repeat(50)}`);
+  console.log(`[${index + 1}/${total}] STAKE AND REDEEM`);
+  console.log(`${"=".repeat(50)}`);
+  console.log(`  API Key: ${apiKey.slice(0, 12)}...`);
+  console.log(`  Contract: ${contract}`);
+  console.log(`  Symbol: ${symbol}`);
+  console.log(`  Chain: ${chain}`);
+  console.log(`  Amount: ${amount}`);
+
+  try {
+    // Update ACP config
+    console.log("\n[Setup] Updating ACP config...");
+    updateACPConfig(apiKey);
+    console.log("✓ API key configured");
+
+    // Step 1: Create stake job
+    console.log("\n[Step 1/3] Creating stake job...");
+    const requirements = JSON.stringify({
+      contractAddress: contract,
+      symbol: symbol,
+      chain: chain,
+      amount: parseFloat(amount)
+    });
+
+    const stakeResult = await runACP([
+      "job", "create", axelrodWallet, "stake",
+      "--requirements", requirements
+    ]);
+
+    if (stakeResult.exitCode !== 0) {
+      console.error("✗ Stake job creation failed");
+      console.error(stakeResult.stderr || stakeResult.stdout);
+      return { success: false, error: "Stake job creation failed" };
+    }
+
+    const stakeJobId = parseJobId(stakeResult.stdout) || parseJobId(stakeResult.stderr);
+    if (!stakeJobId) {
+      console.error("✗ Could not parse stake job ID");
+      console.log(stakeResult.stdout);
+      return { success: false, error: "Could not parse stake job ID" };
+    }
+
+    console.log(`✓ Stake job created: ${stakeJobId}`);
+
+    // Step 2: Wait for stake completion
+    console.log("\n[Step 2/3] Waiting for stake to complete...");
+    const stakeCompleted = await waitForJobCompletion(stakeJobId);
+
+    if (!stakeCompleted) {
+      console.error(`✗ Stake job ${stakeJobId} did not complete`);
+      return { success: false, error: "Stake job did not complete" };
+    }
+
+    console.log(`✓ Stake job completed`);
+
+    // Get orderId
+    const statusResult = await runACP(["job", "status", stakeJobId, "--json"]);
+    const orderId = parseOrderId(statusResult.stdout);
+
+    if (!orderId) {
+      console.error("✗ Could not find orderId in stake deliverable");
+      console.log(statusResult.stdout);
+      return { success: false, error: "No orderId found" };
+    }
+
+    console.log(`✓ Order ID: ${orderId}`);
+
+    // Step 3: Create redeem job
+    console.log("\n[Step 3/3] Creating redeem job...");
+    const redeemRequirements = JSON.stringify({ orderId });
+
+    const redeemResult = await runACP([
+      "job", "create", axelrodWallet, "redeem",
+      "--requirements", redeemRequirements
+    ]);
+
+    if (redeemResult.exitCode !== 0) {
+      console.error("✗ Redeem job creation failed");
+      console.error(redeemResult.stderr || redeemResult.stdout);
+      return { success: false, error: "Redeem job creation failed" };
+    }
+
+    const redeemJobId = parseJobId(redeemResult.stdout) || parseJobId(redeemResult.stderr);
+    if (!redeemJobId) {
+      console.error("✗ Could not parse redeem job ID");
+      console.log(redeemResult.stdout);
+      return { success: false, error: "Could not parse redeem job ID" };
+    }
+
+    console.log(`✓ Redeem job created: ${redeemJobId}`);
+
+    // Wait for redeem completion
+    console.log("\n[Final] Waiting for redeem to complete...");
+    const redeemCompleted = await waitForJobCompletion(redeemJobId);
+
+    if (!redeemCompleted) {
+      console.warn(`⚠ Redeem job ${redeemJobId} did not complete in time`);
+      console.log("You can check status later with: acp job status " + redeemJobId);
+    } else {
+      console.log(`✓ Redeem job completed`);
+    }
+
+    console.log(`\n✓ [${index + 1}/${total}] COMPLETED`);
+    console.log(`  Stake Job ID: ${stakeJobId}`);
+    console.log(`  Order ID: ${orderId}`);
+    console.log(`  Redeem Job ID: ${redeemJobId}`);
+
+    return {
+      success: true,
+      stakeJobId,
+      orderId,
+      redeemJobId
+    };
+  } catch (error) {
+    const errorMsg = (error as Error).message;
+    console.error(`✗ [${index + 1}/${total}] FAILED: ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
+}
+
 // Main function
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -236,6 +368,9 @@ Examples:
 
   # Specify custom token
   stake-redeem --contract 0x... --symbol AXR --chain base --amount 100
+
+Note: If multiple API keys are configured in config.yaml,
+this will execute stake_redeem for each key in serial order.
 `);
     return 0;
   }
@@ -257,121 +392,33 @@ Examples:
   const chain = args.chain || DEFAULT_CHAIN;
   const amount = args.amount;
 
-  // Load config and get API key
+  // Load config and get API keys
   const config = loadConfig();
-  const apiKey = getApiKey(config, args["api-key"]);
+  const apiKeys = getApiKeys(config, args["api-key"]);
 
-  console.log("\n" + "=".repeat(50));
-  console.log("STAKE AND REDEEM");
-  console.log("=".repeat(50));
-  console.log(`  Contract: ${contract}`);
-  console.log(`  Symbol: ${symbol}`);
-  console.log(`  Chain: ${chain}`);
-  console.log(`  Amount: ${amount}`);
+  console.log(`\nFound ${apiKeys.length} API key(s), will execute stake_redeem for each key in serial order.\n`);
 
-  // Update ACP config
-  console.log("\n[Setup] Updating ACP config...");
-  updateACPConfig(apiKey);
-  console.log("✓ API key configured");
+  const results = [];
+  let successCount = 0;
 
-  // Axelrod wallet
-  const axelrodWallet = "0x999A1B6033998A05F7e37e4BD471038dF46624E1";
-
-  // Step 1: Create stake job
-  console.log("\n[Step 1/3] Creating stake job...");
-  const requirements = JSON.stringify({
-    contractAddress: contract,
-    symbol: symbol,
-    chain: chain,
-    amount: parseFloat(amount)
-  });
-
-  const stakeResult = await runACP([
-    "job", "create", axelrodWallet, "stake",
-    "--requirements", requirements
-  ]);
-
-  if (stakeResult.exitCode !== 0) {
-    console.error("✗ Stake job creation failed");
-    console.error(stakeResult.stderr || stakeResult.stdout);
-    return 1;
+  // Execute stake_redeem for each API key in serial
+  for (let i = 0; i < apiKeys.length; i++) {
+    const result = await executeStakeRedeem(apiKeys[i], contract, symbol, chain, amount, i, apiKeys.length);
+    results.push(result);
+    if (result.success) {
+      successCount++;
+    }
   }
 
-  const stakeJobId = parseJobId(stakeResult.stdout) || parseJobId(stakeResult.stderr);
-  if (!stakeJobId) {
-    console.error("✗ Could not parse stake job ID");
-    console.log(stakeResult.stdout);
-    return 1;
-  }
+  // Summary
+  console.log(`\n${"=".repeat(50)}`);
+  console.log("SUMMARY");
+  console.log(`${"=".repeat(50)}`);
+  console.log(`  Total: ${apiKeys.length}`);
+  console.log(`  Success: ${successCount}`);
+  console.log(`  Failed: ${apiKeys.length - successCount}`);
 
-  console.log(`✓ Stake job created: ${stakeJobId}`);
-
-  // Step 2: Wait for stake completion
-  console.log("\n[Step 2/3] Waiting for stake to complete...");
-  const stakeCompleted = await waitForJobCompletion(stakeJobId);
-
-  if (!stakeCompleted) {
-    console.error(`✗ Stake job ${stakeJobId} did not complete`);
-    return 1;
-  }
-
-  console.log(`✓ Stake job completed`);
-
-  // Get orderId
-  const statusResult = await runACP(["job", "status", stakeJobId, "--json"]);
-  const orderId = parseOrderId(statusResult.stdout);
-
-  if (!orderId) {
-    console.error("✗ Could not find orderId in stake deliverable");
-    console.log(statusResult.stdout);
-    return 1;
-  }
-
-  console.log(`✓ Order ID: ${orderId}`);
-
-  // Step 3: Create redeem job
-  console.log("\n[Step 3/3] Creating redeem job...");
-  const redeemRequirements = JSON.stringify({ orderId });
-
-  const redeemResult = await runACP([
-    "job", "create", axelrodWallet, "redeem",
-    "--requirements", redeemRequirements
-  ]);
-
-  if (redeemResult.exitCode !== 0) {
-    console.error("✗ Redeem job creation failed");
-    console.error(redeemResult.stderr || redeemResult.stdout);
-    return 1;
-  }
-
-  const redeemJobId = parseJobId(redeemResult.stdout) || parseJobId(redeemResult.stderr);
-  if (!redeemJobId) {
-    console.error("✗ Could not parse redeem job ID");
-    console.log(redeemResult.stdout);
-    return 1;
-  }
-
-  console.log(`✓ Redeem job created: ${redeemJobId}`);
-
-  // Wait for redeem completion
-  console.log("\n[Final] Waiting for redeem to complete...");
-  const redeemCompleted = await waitForJobCompletion(redeemJobId);
-
-  if (!redeemCompleted) {
-    console.warn(`⚠ Redeem job ${redeemJobId} did not complete in time`);
-    console.log("You can check status later with: acp job status " + redeemJobId);
-  } else {
-    console.log(`✓ Redeem job completed`);
-  }
-
-  console.log("\n" + "=".repeat(50));
-  console.log("✓ STAKE AND REDEEM COMPLETED");
-  console.log("=".repeat(50));
-  console.log(`  Stake Job ID: ${stakeJobId}`);
-  console.log(`  Order ID: ${orderId}`);
-  console.log(`  Redeem Job ID: ${redeemJobId}`);
-
-  return 0;
+  return apiKeys.length === successCount ? 0 : 1;
 }
 
 // Run
