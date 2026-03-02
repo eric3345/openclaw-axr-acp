@@ -17,7 +17,6 @@ import { spawn } from "child_process";
 import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { homedir } from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,14 +33,6 @@ interface Config {
 
 interface ACPConfig {
   LITE_AGENT_API_KEY?: string;
-}
-
-// Expand ~ in path
-function expandPath(path: string): string {
-  if (path.startsWith("~/") || path === "~") {
-    return join(homedir(), path.slice(1));
-  }
-  return path;
 }
 
 // Simple YAML parser for our config format
@@ -86,8 +77,7 @@ function loadConfig(): Config {
 // Get ACP path from config
 function getACPPath(): string {
   const config = loadConfig();
-  const acpPath = config.acpPath || "~/code/ai/OpenSource/Virtual/virtuals-protocol-acp";
-  return expandPath(acpPath);
+  return config.acpPath || "/path/to/virtuals-protocol-acp";
 }
 
 // Get ACP config file path

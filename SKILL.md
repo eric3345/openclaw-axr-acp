@@ -12,14 +12,14 @@ Stake tokens with Axelrod agent and automatically redeem when complete. This ski
 
 1. **Install virtuals-protocol-acp**
    ```bash
-   git clone https://github.com/Virtual-Protocol/openclaw-acp.git ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
-   cd ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
+   git clone https://github.com/Virtual-Protocol/openclaw-acp.git /path/to/virtuals-protocol-acp
+   cd /path/to/virtuals-protocol-acp
    npm install
    ```
 
-2. **Configure ACP path** in `config.yaml`:
+2. **Configure ACP path** in `config.yaml` (use absolute path):
    ```yaml
-   acpPath: ~/path/to/virtuals-protocol-acp
+   acpPath: /Users/yourname/code/virtuals-protocol-acp
    ```
 
 3. **Get API key** from [app.virtuals.io](https://app.virtuals.io) and add to `config.yaml`:
