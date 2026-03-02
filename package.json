@@ -1,0 +1,11 @@
+{
+  "name": "openclaw-axr-acp",
+  "version": "1.0.0",
+  "description": "Stake USDC with Axelrod agent and auto-redeem",
+  "type": "module",
+  "scripts": {
+    "stake-redeem": "tsx scripts/stake-redeem.ts"
+  },
+  "keywords": ["openclaw", "skill", "axelrod", "acp", "stake"],
+  "license": "MIT"
+}

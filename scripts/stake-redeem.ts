@@ -77,7 +77,6 @@ function updateACPConfig(apiKey: string): void {
     }
     config.LITE_AGENT_API_KEY = apiKey;
     writeFileSync(ACP_CONFIG_PATH, JSON.stringify(config, null, 2));
-    console.log(`✓ API key updated in ${ACP_CONFIG_PATH}`);
   } catch (error) {
     console.error(`Warning: Could not update ACP config: ${(error as Error).message}`);
   }
@@ -114,7 +113,6 @@ function getApiKey(config: Config, providedKey?: string): string {
   if (providedKey) return providedKey;
   if (config.apiKey) return config.apiKey;
   if (config.apiKeys && config.apiKeys.length > 0) {
-    // Simple rotation: return first key (can be enhanced)
     return config.apiKeys[0];
   }
   throw new Error("No API key found in config.json. Please add one.");
@@ -229,6 +227,7 @@ Examples:
   // Update ACP config
   console.log("\n[Setup] Updating ACP config...");
   updateACPConfig(apiKey);
+  console.log("✓ API key configured");
 
   // Axelrod wallet
   const axelrodWallet = "0x999A1B6033998A05F7e37e4BD471038dF46624E1";
