@@ -1,10 +1,12 @@
 # Axelrod Stake & Redeem Configuration
 
 # Path to virtuals-protocol-acp installation (absolute path)
-# After installing virtuals-protocol-acp, update this path
 acpPath: /Users/yourname/code/virtuals-protocol-acp
 
-# ACP API Keys from app.virtuals.io
-apiKeys:
-  - "acp-your-api-key-here"
-
+# API Key + Wallet Address pairs
+# Each apiKey has its own walletAddress for account identification
+accounts:
+  - apiKey: "acp-your-api-key-here"
+    walletAddress: "0xYourWalletAddress"
+  - apiKey: "acp-another-key-here"
+    walletAddress: "0xAnotherWalletAddress"

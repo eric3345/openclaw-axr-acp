@@ -1,16 +1,13 @@
 #!/usr/bin/env npx tsx
 /**
- * stake-redeem - Stake tokens and automatically redeem
+ * redeem - Redeem staked tokens by orderId
  *
- * Usage: stake-redeem [options]
+ * Usage: redeem [options]
  *
  * Options:
- *   --contract <address>  Token contract address (default: USDC on Base)
- *   --symbol <symbol>      Token symbol (default: USDC)
- *   --chain <name>         Chain name (default: base)
- *   --amount <number>      Amount to stake (required)
- *   --api-key <key>        ACP API key (overrides config)
- *   --help                 Show help
+ *   --wallet <address>   Wallet address (required if multiple accounts)
+ *   --order-id <id>       Order ID from stake (required)
+ *   --help                Show help
  */
 
 import { spawn } from "child_process";
@@ -130,16 +127,29 @@ function parseArgs(args: string[]): Record<string, string> {
   return result;
 }
 
-// Get all accounts
-function getAccounts(providedKey?: string): Account[] {
+// Get accounts from config
+function getAccounts(): Account[] {
   const config = loadConfig();
-  if (providedKey) {
-    return [{ apiKey: providedKey, walletAddress: "" }];
-  }
   if (!config.accounts || config.accounts.length === 0) {
     throw new Error("No accounts found in config.yaml. Please add accounts with apiKey and walletAddress.");
   }
   return config.accounts;
+}
+
+// Get account by wallet address
+function getAccountByWallet(walletAddress: string): Account {
+  const accounts = getAccounts();
+  const account = accounts.find(a => a.walletAddress.toLowerCase() === walletAddress.toLowerCase());
+  if (!account) {
+    throw new Error(`No account found with wallet address: ${walletAddress}`);
+  }
+  return account;
+}
+
+// Get first account
+function getFirstAccount(): Account {
+  const accounts = getAccounts();
+  return accounts[0];
 }
 
 // Update ACP config with API key
@@ -192,21 +202,6 @@ function parseJobId(output: string): string | null {
   return match ? match[1] : null;
 }
 
-// Parse orderId from deliverable
-function parseOrderId(output: string): string | null {
-  try {
-    const jsonMatch = output.match(/\{[^{}]*"orderId"[^{}]*\}/);
-    if (jsonMatch) {
-      const obj = JSON.parse(jsonMatch[0]);
-      return obj.orderId || obj.data?.orderId || null;
-    }
-  } catch {
-    // Ignore JSON parse errors
-  }
-  const match = output.match(/order[_\s]?id[:\s]+(["']?)([a-zA-Z0-9]+)\1/i);
-  return match ? match[2] : null;
-}
-
 // Wait for job completion
 async function waitForJobCompletion(jobId: string, timeoutMs = 300000): Promise<boolean> {
   const startTime = Date.now();
@@ -229,29 +224,22 @@ async function waitForJobCompletion(jobId: string, timeoutMs = 300000): Promise<
   return false;
 }
 
-// Execute stake and redeem for a single account
-async function executeStakeRedeem(
+// Execute redeem for a single account
+async function executeRedeem(
   account: Account,
-  contract: string,
-  symbol: string,
-  chain: string,
-  amount: string,
-  index: number,
-  total: number
-): Promise<{ success: boolean; stakeJobId?: string; orderId?: string; redeemJobId?: string; error?: string }> {
+  orderId: string,
+  index?: number,
+  total?: number
+): Promise<{ success: boolean; redeemJobId?: string; error?: string }> {
   const { apiKey, walletAddress } = account;
   const axelrodWallet = "0x999A1B6033998A05F7e37e4BD471038dF46624E1";
 
   console.log(`\n${"=".repeat(50)}`);
-  console.log(`[${index + 1}/${total}] STAKE AND REDEEM`);
+  console.log(`REDEEM ORDER`);
   console.log(`${"=".repeat(50)}`);
   console.log(`  Account: ${walletAddress}`);
   console.log(`  Agent: ${axelrodWallet}`);
-  console.log(`  API Key: ${apiKey.slice(0, 12)}...`);
-  console.log(`  Contract: ${contract}`);
-  console.log(`  Symbol: ${symbol}`);
-  console.log(`  Chain: ${chain}`);
-  console.log(`  Amount: ${amount}`);
+  console.log(`  Order ID: ${orderId}`);
 
   try {
     // Update ACP config
@@ -259,65 +247,13 @@ async function executeStakeRedeem(
     updateACPConfig(apiKey);
     console.log("✓ API key configured");
 
-    // Step 1: Create stake job
-    console.log("\n[Step 1/3] Creating stake job...");
-    const requirements = JSON.stringify({
-      contractAddress: contract,
-      symbol: symbol,
-      chain: chain,
-      amount: parseFloat(amount)
-    });
-
-    const stakeResult = await runACP([
-      "job", "create", axelrodWallet, "stake",
-      "--requirements", requirements
-    ]);
-
-    if (stakeResult.exitCode !== 0) {
-      console.error("✗ Stake job creation failed");
-      console.error(stakeResult.stderr || stakeResult.stdout);
-      return { success: false, error: "Stake job creation failed" };
-    }
-
-    const stakeJobId = parseJobId(stakeResult.stdout) || parseJobId(stakeResult.stderr);
-    if (!stakeJobId) {
-      console.error("✗ Could not parse stake job ID");
-      console.log(stakeResult.stdout);
-      return { success: false, error: "Could not parse stake job ID" };
-    }
-
-    console.log(`✓ Stake job created: ${stakeJobId}`);
-
-    // Step 2: Wait for stake completion
-    console.log("\n[Step 2/3] Waiting for stake to complete...");
-    const stakeCompleted = await waitForJobCompletion(stakeJobId);
-
-    if (!stakeCompleted) {
-      console.error(`✗ Stake job ${stakeJobId} did not complete`);
-      return { success: false, error: "Stake job did not complete" };
-    }
-
-    console.log(`✓ Stake job completed`);
-
-    // Get orderId
-    const statusResult = await runACP(["job", "status", stakeJobId, "--json"]);
-    const orderId = parseOrderId(statusResult.stdout);
-
-    if (!orderId) {
-      console.error("✗ Could not find orderId in stake deliverable");
-      console.log(statusResult.stdout);
-      return { success: false, error: "No orderId found" };
-    }
-
-    console.log(`✓ Order ID: ${orderId}`);
-
-    // Step 3: Create redeem job
-    console.log("\n[Step 3/3] Creating redeem job...");
-    const redeemRequirements = JSON.stringify({ orderId });
+    // Create redeem job
+    console.log("\n[Step 1/1] Creating redeem job...");
+    const requirements = JSON.stringify({ orderId });
 
     const redeemResult = await runACP([
       "job", "create", axelrodWallet, "redeem",
-      "--requirements", redeemRequirements
+      "--requirements", requirements
     ]);
 
     if (redeemResult.exitCode !== 0) {
@@ -346,20 +282,16 @@ async function executeStakeRedeem(
       console.log(`✓ Redeem job completed`);
     }
 
-    console.log(`\n✓ [${index + 1}/${total}] COMPLETED`);
-    console.log(`  Stake Job ID: ${stakeJobId}`);
-    console.log(`  Order ID: ${orderId}`);
+    console.log(`\n✓ COMPLETED`);
     console.log(`  Redeem Job ID: ${redeemJobId}`);
 
     return {
       success: true,
-      stakeJobId,
-      orderId,
       redeemJobId
     };
   } catch (error) {
     const errorMsg = (error as Error).message;
-    console.error(`✗ [${index + 1}/${total}] FAILED: ${errorMsg}`);
+    console.error(`✗ FAILED: ${errorMsg}`);
     return { success: false, error: errorMsg };
   }
 }
@@ -368,32 +300,24 @@ async function executeStakeRedeem(
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  // Default values (USDC on Base)
-  const DEFAULT_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  const DEFAULT_SYMBOL = "USDC";
-  const DEFAULT_CHAIN = "base";
-
   // Show help
   if (args.help || args.h) {
     console.log(`
-stake-redeem - Stake tokens and automatically redeem
+redeem - Redeem staked tokens by orderId
 
-Usage: stake-redeem [options]
+Usage: redeem [options]
 
 Options:
-  --contract <address>  Token contract address (default: ${DEFAULT_CONTRACT})
-  --symbol <symbol>      Token symbol (default: ${DEFAULT_SYMBOL})
-  --chain <name>         Chain name (default: ${DEFAULT_CHAIN})
-  --amount <number>      Amount to stake (required)
-  --api-key <key>        ACP API key (overrides config)
-  --help                 Show this help
+  --wallet <address>   Wallet address to use (optional, uses first account if not specified)
+  --order-id <id>       Order ID from stake (required)
+  --help                Show this help
 
 Examples:
-  # Use defaults (USDC on Base), only specify amount
-  stake-redeem --amount 0.01
+  # Redeem using first account in config
+  redeem --order-id 721827616973139968
 
-  # Specify custom token
-  stake-redeem --contract 0x... --symbol AXR --chain base --amount 100
+  # Redeem using specific wallet
+  redeem --wallet 0x6fCc85effd01e847Ea9D59ee50a82dd44C0823DE --order-id 721827616973139968
 
 Config format (config.yaml):
   accounts:
@@ -401,9 +325,6 @@ Config format (config.yaml):
       walletAddress: "0xYourWalletAddress"
     - apiKey: "acp-another-key"
       walletAddress: "0xAnotherWalletAddress"
-
-Note: If multiple accounts are configured in config.yaml,
-this will execute stake_redeem for each account in serial order.
 `);
     return 0;
   }
@@ -414,43 +335,28 @@ this will execute stake_redeem for each account in serial order.
     return main();
   }
 
-  // Validate required arguments (only amount is required)
-  if (!args.amount) {
-    console.error("Error: Missing required argument: --amount");
+  // Validate required arguments
+  if (!args["order-id"]) {
+    console.error("Error: Missing required argument: --order-id");
     return 1;
   }
 
-  const contract = args.contract || DEFAULT_CONTRACT;
-  const symbol = args.symbol || DEFAULT_SYMBOL;
-  const chain = args.chain || DEFAULT_CHAIN;
-  const amount = args.amount;
+  const orderId = args["order-id"];
+  const walletAddress = args.wallet;
 
-  // Load config and get accounts
-  const accounts = getAccounts(args["api-key"]);
-
-  console.log(`\nFound ${accounts.length} account(s), will execute stake_redeem for each account in serial order.\n`);
-
-  const results = [];
-  let successCount = 0;
-
-  // Execute stake_redeem for each account in serial
-  for (let i = 0; i < accounts.length; i++) {
-    const result = await executeStakeRedeem(accounts[i], contract, symbol, chain, amount, i, accounts.length);
-    results.push(result);
-    if (result.success) {
-      successCount++;
-    }
+  // Get account
+  let account: Account;
+  if (walletAddress) {
+    account = getAccountByWallet(walletAddress);
+  } else {
+    account = getFirstAccount();
+    console.log(`No wallet specified, using first account: ${account.walletAddress}`);
   }
 
-  // Summary
-  console.log(`\n${"=".repeat(50)}`);
-  console.log("SUMMARY");
-  console.log(`${"=".repeat(50)}`);
-  console.log(`  Total: ${accounts.length}`);
-  console.log(`  Success: ${successCount}`);
-  console.log(`  Failed: ${accounts.length - successCount}`);
+  // Execute redeem
+  const result = await executeRedeem(account, orderId);
 
-  return accounts.length === successCount ? 0 : 1;
+  return result.success ? 0 : 1;
 }
 
 // Run

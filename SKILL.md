@@ -1,12 +1,12 @@
 ---
-name: axelrod-stake-redeem
-description: Stake USDC tokens with Axelrod agent and automatically redeem. Axelrod is an AI-powered trading agent on Base chain with wallet address 0x999A1B6033998A05F7e37e4BD471038dF46624E1.
+name: openclaw-axr-acp
+description: Stake USDC tokens and automatically redeem. Supports Axelrod agent and other AI trading agents on Base chain.
 metadata: {"openclaw":{"emoji":"💰","homepage":"https://virtuals.io","primaryEnv":"LITE_AGENT_API_KEY"}}
 ---
 
 # Axelrod Stake & Redeem
 
-Stake tokens with Axelrod agent and automatically redeem when complete. This skill handles the full stake → redeem cycle for USDC on Base chain.
+Stake tokens and automatically redeem when complete. This skill handles both stake → redeem cycle and standalone redeem operations.
 
 ## Prerequisites
 
@@ -22,28 +22,27 @@ Stake tokens with Axelrod agent and automatically redeem when complete. This ski
    acpPath: /Users/yourname/code/virtuals-protocol-acp
    ```
 
-3. **Get API key** from [app.virtuals.io](https://app.virtuals.io) and add to `config.yaml`:
-   ```yaml
-   apiKeys:
-     - "acp-your-api-key-here"
-   ```
+3. **Get API key** from [app.virtuals.io](https://app.virtuals.io) and add to `config.yaml`
 
 ## Configuration
 
 Edit `config.yaml`:
 
 ```yaml
-# ACP API Keys
-apiKeys:
-  - "acp-your-api-key-here"
+# Path to virtuals-protocol-acp installation (absolute path)
+acpPath: /Users/yourname/code/virtuals-protocol-acp
 
-# Path to virtuals-protocol-acp (update after installation)
-acpPath: ~/code/ai/OpenSource/Virtual/virtuals-protocol-acp
+# API Key + Wallet Address pairs
+accounts:
+  - apiKey: "acp-your-api-key"
+    walletAddress: "0xYourWalletAddress"
+  - apiKey: "acp-another-key"
+    walletAddress: "0xAnotherWalletAddress"
 ```
 
 ## Usage
 
-### Quick Stake & Redeem (USDC on Base)
+### Stake & Auto-Redeem (USDC on Base)
 
 ```bash
 scripts/stake-redeem.ts --amount 0.01
@@ -52,7 +51,16 @@ scripts/stake-redeem.ts --amount 0.01
 This uses the defaults:
 - Token: USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - Chain: base
-- Agent: Axelrod (`0x999A1B6033998A05F7e37e4BD471038dF46624E1`)
+
+### Standalone Redeem
+
+```bash
+# Redeem using first account in config
+scripts/redeem.ts --order-id 721827616973139968
+
+# Redeem using specific wallet
+scripts/redeem.ts --wallet 0xYourWalletAddress --order-id 721827616973139968
+```
 
 ### Custom Token
 
@@ -64,7 +72,9 @@ scripts/stake-redeem.ts \
   --amount 100
 ```
 
-### Options
+## Options
+
+### stake-redeem.ts
 
 | Option | Description | Required | Default |
 |--------|-------------|----------|---------|
@@ -74,18 +84,27 @@ scripts/stake-redeem.ts \
 | `--amount` | Amount to stake | Yes | - |
 | `--api-key` | Override API key | No | From config |
 
+### redeem.ts
+
+| Option | Description | Required | Default |
+|--------|-------------|----------|---------|
+| `--wallet` | Wallet address | No | First account |
+| `--order-id` | Order ID from stake | Yes | - |
+
 ## How It Works
 
-1. Reads `acpPath` from config.yaml
-2. Updates ACP config with your API key
-3. Creates stake job with Axelrod
-4. Polls job status until completion
-5. Extracts orderId from deliverable
-6. Creates redeem job automatically
-7. Waits for redeem completion
+### Stake & Redeem Cycle
+1. Reads accounts from config.yaml
+2. For each account (serial execution):
+   - Updates ACP config with API key
+   - Creates stake job
+   - Polls job status until completion
+   - Extracts orderId from deliverable
+   - Creates redeem job automatically
+   - Waits for redeem completion
 
-## Axelrod Agent
-
-- **Wallet:** `0x999A1B6033998A05F7e37e4BD471038dF46624E1`
-- **Chain:** Base
-- **Offerings:** `stake`, `redeem`
+### Standalone Redeem
+1. Finds account by wallet address (uses first if not specified)
+2. Updates ACP config with API key
+3. Creates redeem job with orderId
+4. Waits for redeem completion
