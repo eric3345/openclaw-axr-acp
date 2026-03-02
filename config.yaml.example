@@ -1,0 +1,8 @@
+# Axelrod ACP Trading Configuration Example
+# Copy this file to config.yaml and add your API keys
+
+# API Keys from app.virtuals.io (LITE_AGENT_API_KEY)
+# You can add multiple keys for rotation
+apiKeys:
+  - "your-first-lite-agent-api-key-here"
+  # - "your-second-api-key-here"  # Optional: uncomment to add more
