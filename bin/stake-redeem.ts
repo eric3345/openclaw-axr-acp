@@ -5,10 +5,10 @@
  * Usage: stake-redeem [options]
  *
  * Options:
- *   --contract <address>  Token contract address
- *   --symbol <symbol>      Token symbol (e.g., USDC)
+ *   --contract <address>  Token contract address (default: USDC on Base)
+ *   --symbol <symbol>      Token symbol (default: USDC)
  *   --chain <name>         Chain name (default: base)
- *   --amount <number>      Amount to stake
+ *   --amount <number>      Amount to stake (required)
  *   --api-key <key>        ACP API key (overrides config)
  *   --help                 Show help
  */
@@ -167,42 +167,51 @@ async function waitForJobCompletion(jobId: string, timeoutMs = 300000): Promise<
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
+  // Default values (USDC on Base)
+  const DEFAULT_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const DEFAULT_SYMBOL = "USDC";
+  const DEFAULT_CHAIN = "base";
+
   // Show help
-  if (args.help || args.h || Object.keys(args).length === 0) {
+  if (args.help || args.h) {
     console.log(`
 stake-redeem - Stake tokens and automatically redeem
 
 Usage: stake-redeem [options]
 
 Options:
-  --contract <address>  Token contract address (required)
-  --symbol <symbol>      Token symbol, e.g., USDC (required)
-  --chain <name>         Chain name (default: base)
+  --contract <address>  Token contract address (default: ${DEFAULT_CONTRACT})
+  --symbol <symbol>      Token symbol (default: ${DEFAULT_SYMBOL})
+  --chain <name>         Chain name (default: ${DEFAULT_CHAIN})
   --amount <number>      Amount to stake (required)
   --api-key <key>        ACP API key (overrides config)
   --help                 Show this help
 
-Example:
-  stake-redeem --contract 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \\
-               --symbol USDC \\
-               --chain base \\
-               --amount 0.01
+Examples:
+  # Use defaults (USDC on Base), only specify amount
+  stake-redeem --amount 0.01
+
+  # Specify custom token
+  stake-redeem --contract 0x... --symbol AXR --chain base --amount 100
 `);
     return 0;
   }
 
-  // Validate required arguments
-  const required = ["contract", "symbol", "amount"];
-  for (const field of required) {
-    if (!args[field]) {
-      console.error(`Error: Missing required argument: --${field}`);
-      return 1;
-    }
+  // If no arguments at all, show help
+  if (Object.keys(args).length === 0) {
+    args.help = "true";
+    return main();
   }
 
-  const contract = args.contract;
-  const symbol = args.symbol;
-  const chain = args.chain || "base";
+  // Validate required arguments (only amount is required)
+  if (!args.amount) {
+    console.error("Error: Missing required argument: --amount");
+    return 1;
+  }
+
+  const contract = args.contract || DEFAULT_CONTRACT;
+  const symbol = args.symbol || DEFAULT_SYMBOL;
+  const chain = args.chain || DEFAULT_CHAIN;
   const amount = args.amount;
 
   // Load config and get API key

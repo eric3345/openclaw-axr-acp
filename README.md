@@ -7,6 +7,7 @@ Simple CLI to stake tokens with Axelrod agent and automatically redeem.
 - **Stake & Auto-Redeem**: Stake tokens and automatically redeem when complete
 - **ACP Integration**: Uses [Virtuals Protocol ACP](https://github.com/Virtual-Protocol/openclaw-acp) CLI
 - **API Key Rotation**: Supports multiple API keys with rotation
+- **Smart Defaults**: Pre-configured for USDC on Base chain
 
 ## Prerequisites
 
@@ -45,31 +46,47 @@ Or use multiple keys for rotation:
 
 ## Usage
 
-### Basic Usage
+### Quick Start (USDC on Base)
+
+```bash
+npx tsx bin/stake-redeem.ts --amount 0.01
+```
+
+This uses the defaults:
+- Contract: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (USDC)
+- Symbol: `USDC`
+- Chain: `base`
+
+### Custom Token
 
 ```bash
 npx tsx bin/stake-redeem.ts \
-  --contract 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
-  --symbol USDC \
+  --contract 0xYourTokenContract \
+  --symbol TOKEN \
   --chain base \
-  --amount 0.01
+  --amount 100
 ```
 
 ### Options
 
-| Option | Description | Required |
-|--------|-------------|----------|
-| `--contract` | Token contract address | Yes |
-| `--symbol` | Token symbol (e.g., USDC) | Yes |
-| `--chain` | Chain name (default: base) | No |
-| `--amount` | Amount to stake | Yes |
-| `--api-key` | Override API key from config | No |
+| Option | Description | Required | Default |
+|--------|-------------|----------|---------|
+| `--contract` | Token contract address | No | USDC on Base |
+| `--symbol` | Token symbol | No | `USDC` |
+| `--chain` | Chain name | No | `base` |
+| `--amount` | Amount to stake | Yes | - |
+| `--api-key` | Override API key from config | No | - |
 
 ### Make Executable (Unix/Linux/macOS)
 
 ```bash
 chmod +x bin/stake-redeem.ts
-./bin/stake-redeem.ts --contract 0x... --symbol USDC --amount 1
+
+# Use defaults
+./bin/stake-redeem.ts --amount 0.01
+
+# Or specify custom token
+./bin/stake-redeem.ts --contract 0x... --symbol AXR --amount 100
 ```
 
 ## How It Works
