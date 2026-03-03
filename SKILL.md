@@ -1,12 +1,12 @@
 ---
 name: openclaw-axr-acp
-description: Stake USDC tokens and automatically redeem. Supports Axelrod agent and other AI trading agents on Base chain.
-metadata: {"openclaw":{"emoji":"💰","homepage":"https://virtuals.io","primaryEnv":"LITE_AGENT_API_KEY"}}
+description: Stake & Auto Redeem, Swap & Auto Swap Back using Axelrod agent on Base chain.
+metadata: {"openclaw":{"emoji":"💰"}}
 ---
 
-# Axelrod Stake & Redeem
+# Axelrod ACP Operations
 
-Stake tokens and automatically redeem when complete. This skill handles both stake → redeem cycle and standalone redeem operations.
+Stake USDC, swap tokens, and automatically redeem using Axelrod agent on Base chain. Supports stake → redeem cycle, token swap, and swap & back operations.
 
 ## Prerequisites
 
@@ -42,10 +42,10 @@ accounts:
 
 ## Usage
 
-### Stake & Auto-Redeem (USDC on Base)
+### Stake & Auto-Redeem
 
 ```bash
-scripts/stake-redeem.ts --amount 0.01
+npx tsx scripts/stake-redeem.ts --amount 0.01
 ```
 
 This uses the defaults:
@@ -56,21 +56,46 @@ This uses the defaults:
 
 ```bash
 # Redeem using first account in config
-scripts/redeem.ts --order-id 721827616973139968
+npx tsx scripts/redeem.ts --order-id 721827616973139968
 
 # Redeem using specific wallet
-scripts/redeem.ts --wallet 0xYourWalletAddress --order-id 721827616973139968
+npx tsx scripts/redeem.ts --wallet 0xYourWalletAddress --order-id 721827616973139968
 ```
 
-### Custom Token
+### Token Swap
 
 ```bash
-scripts/stake-redeem.ts \
-  --contract 0xYourTokenContract \
-  --symbol TOKEN \
-  --chain base \
-  --amount 100
+# Swap USDC to WETH
+npx tsx scripts/swap.ts \
+  --from-token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --from-symbol USDC \
+  --to-token 0x4200000000000000000000000000000000006 \
+  --to-symbol WETH \
+  --amount 1
+
+# Swap WETH back to USDC
+npx tsx scripts/swap.ts \
+  --from-token 0x4200000000000000000000000000000000006 \
+  --from-symbol WETH \
+  --to-token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --to-symbol USDC \
+  --amount 0.01
 ```
+
+### Swap & Back (Round-trip)
+
+Execute two swaps automatically - swap tokens then swap back:
+
+```bash
+npx tsx scripts/swap-and-back.ts \
+  --from-token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --from-symbol USDC \
+  --to-token 0x4200000000000000000000000000000000006 \
+  --to-symbol WETH \
+  --amount 0.5
+```
+
+This executes: `USDC → WETH → USDC` using the actual received amount.
 
 ## Options
 
@@ -91,6 +116,28 @@ scripts/stake-redeem.ts \
 | `--wallet` | Wallet address | No | First account |
 | `--order-id` | Order ID from stake | Yes | - |
 
+### swap.ts
+
+| Option | Description | Required | Default |
+|--------|-------------|----------|---------|
+| `--from-token` | Source token contract address | Yes | - |
+| `--from-symbol` | Source token symbol (e.g., USDC) | Yes | - |
+| `--to-token` | Target token contract address | Yes | - |
+| `--to-symbol` | Target token symbol (e.g., WETH) | Yes | - |
+| `--amount` | Amount to swap | Yes | - |
+| `--api-key` | Override API key | No | From config |
+
+### swap-and-back.ts
+
+| Option | Description | Required | Default |
+|--------|-------------|----------|---------|
+| `--from-token` | Source token contract address | Yes | - |
+| `--from-symbol` | Source token symbol (e.g., USDC) | Yes | - |
+| `--to-token` | Target token contract address | Yes | - |
+| `--to-symbol` | Target token symbol (e.g., WETH) | Yes | - |
+| `--amount` | Amount to swap | Yes | - |
+| `--api-key` | Override API key | No | From config |
+
 ## How It Works
 
 ### Stake & Redeem Cycle
@@ -108,3 +155,18 @@ scripts/stake-redeem.ts \
 2. Updates ACP config with API key
 3. Creates redeem job with orderId
 4. Waits for redeem completion
+
+### Token Swap
+1. Reads accounts from config.yaml
+2. For each account (serial execution):
+   - Updates ACP config with API key
+   - Creates swap_token job
+   - Polls job status until completion
+   - Returns received amount
+
+### Swap & Back
+1. Reads accounts from config.yaml
+2. For each account (serial execution):
+   - Executes first swap (from → to)
+   - Gets received amount from job deliverable
+   - Executes second swap (to → from) with received amount

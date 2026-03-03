@@ -4,7 +4,9 @@
   "description": "Stake USDC with Axelrod agent and auto-redeem",
   "type": "module",
   "scripts": {
-    "stake-redeem": "tsx scripts/stake-redeem.ts"
+    "stake-redeem": "tsx scripts/stake-redeem.ts",
+    "swap": "tsx scripts/swap.ts",
+    "swap-and-back": "tsx scripts/swap-and-back.ts"
   },
   "keywords": ["openclaw", "skill", "axelrod", "acp", "stake"],
   "license": "MIT"

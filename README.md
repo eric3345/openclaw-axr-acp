@@ -1,13 +1,14 @@
-# Axelrod Stake & Redeem Skill
+# Axelrod ACP Skill
 
-OpenClaw skill to stake USDC tokens with Axelrod agent and automatically redeem.
+Stake & Auto Redeem, Swap & Auto Swap Back using Axelrod agent on Base chain.
 
 ## Features
 
 - **Stake & Auto-Redeem**: Stake tokens and automatically redeem when complete
 - **Standalone Redeem**: Redeem existing staked positions by order ID
+- **Token Swap**: Swap any token pair on Base chain (USDC, WETH, etc.)
+- **Swap & Back**: Execute swap and automatically swap back (round-trip)
 - **ACP Integration**: Uses [Virtuals Protocol ACP](https://github.com/Virtual-Protocol/openclaw-acp)
-- **Smart Defaults**: Pre-configured for USDC on Base chain
 - **Multi-Account**: Support for multiple API keys with wallet addresses
 
 ## Installation
@@ -44,14 +45,33 @@ Get your API key from [app.virtuals.io](https://app.virtuals.io).
 
 ```bash
 # Stake & auto-redeem - USDC on Base
-scripts/stake-redeem.ts --amount 0.01
-
-# Custom token
-scripts/stake-redeem.ts --contract 0x... --symbol AXR --amount 100
+npx tsx scripts/stake-redeem.ts --amount 0.01
 
 # Standalone redeem
-scripts/redeem.ts --order-id 721827616973139968
-scripts/redeem.ts --wallet 0xYourWalletAddress --order-id 721827616973139968
+npx tsx scripts/redeem.ts --order-id 721827616973139968
+
+# Swap USDC to WETH
+npx tsx scripts/swap.ts \
+  --from-token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --from-symbol USDC \
+  --to-token 0x4200000000000000000000000000000000006 \
+  --to-symbol WETH \
+  --amount 1
+
+# Swap & Back - round-trip swap
+npx tsx scripts/swap-and-back.ts \
+  --from-token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --from-symbol USDC \
+  --to-token 0x4200000000000000000000000000000000006 \
+  --to-symbol WETH \
+  --amount 0.5
+```
+
+Or using npm scripts:
+```bash
+npm run stake-redeem -- --amount 0.01
+npm run swap -- --from-symbol USDC --to-symbol WETH --amount 1
+npm run swap-and-back -- --from-symbol USDC --to-symbol WETH --amount 0.5
 ```
 
 ## Links
